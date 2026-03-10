@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halachic Clock (Sha'ot Zmaniyot)</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: background-color 1s ease, color 1s ease;
+        }
+
+        /* Day Mode Colors */
+        body.day-mode {
+            background-color: #f0f8ff; /* AliceBlue */
+            color: #333;
+        }
+
+        /* Night Mode Colors */
+        body.night-mode {
+            background-color: #0f172a; /* Dark Slate */
+            color: #e2e8f0;
+        }
+
+        h1 { margin-bottom: 10px; font-weight: 300; }
+
+        canvas {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            margin: 20px;
+        }
+
+        .info-panel {
+            text-align: center;
+            max-width: 600px;
+            padding: 0 20px;
+        }
+
+        .digital-time {
+            font-size: 2.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .sub-info {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            line-height: 1.5;
+        }
+
+        .explanation {
+            margin-top: 20px;
+            font-style: italic;
+            font-size: 0.85rem;
+            opacity: 0.7;
+            border-top: 1px solid currentColor;
+            padding-top: 10px;
+        }
+
+        #loading { font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+    <div id="loading">Loading SunCalc & Geolocation...</div>
+
+    <div id="app" style="display:none; flex-direction: column; align-items: center;">
+        <h1>Halachic Clock</h1>
+        <canvas id="clockCanvas" width="400" height="400"></canvas>
+        
+        <div class="info-panel">
+            <div class="digital-time" id="halachicDigital">00:00:00</div>
+            <div class="sub-info" id="civilTime">Civil Time: --:--</div>
+            <div class="sub-info" id="sunData">Sunrise: --:-- | Sunset: --:--</div>
+            <div class="explanation">
+                *Sha'ot Zmaniyot* divides the day (sunrise to sunset) and night (sunset to sunrise) into 12 proportional hours each, varying by season and location.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Inject SunCalc
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js';
+        script.onload = init;
+        document.head.appendChild(script);
+
+        // Fallback Coordinates (NYC)
+        let lat = 40.8448;
+        let lng = -73.9442;
+        let userLocationName = "New York City (Fallback)";
+
+        // Global state
+        let animationFrameId;
+
+        function init() {
+            // 2. Get Geolocation
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        lat = position.coords.latitude;
+                        lng = position.coords.longitude;
+                        userLocationName = "Local Coordinates";
+                        startClock();
+                    },
+                    (error) => {
+                        console.warn("Geolocation denied/failed. Using NYC fallback.");
+                        startClock();
+                    }
+                );
+            } else {
+                startClock();
+            }
+        }
+
+        function startClock() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('app').style.display = 'flex';
+            
+            const canvas = document.getElementById('clockCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Start the loop
+            (function loop() {
+                update(ctx);
+                animationFrameId = requestAnimationFrame(loop);
+            })();
+        }
+
+        function update(ctx) {
+            const now = new Date();
+            
+            // 3. Sun Calculations
+            // We need times for today, yesterday (for pre-dawn calc), and tomorrow (for post-sunset calc)
+            const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+            const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+
+            const timesToday = SunCalc.getTimes(now, lat, lng);
+            const timesYest = SunCalc.getTimes(yesterday, lat, lng);
+            const timesTom = SunCalc.getTimes(tomorrow, lat, lng);
+
+            const sunrise = timesToday.sunrise;
+            const sunset = timesToday.sunset;
+
+            let isDaytime = false;
+            let halachicHourVal = 0; // 0.0 to 24.0
+            
+            // Logic to determine current Halachic Hour
+            if (now >= sunrise && now < sunset) {
+                // DAYTIME (0 - 12)
+                isDaytime = true;
+                const dayDuration = sunset - sunrise;
+                const msSinceSunrise = now - sunrise;
+                const percentDay = msSinceSunrise / dayDuration;
+                halachicHourVal = percentDay * 12; // 0 to 12
+            } else {
+                // NIGHTTIME (12 - 24)
+                isDaytime = false;
+                let nightDuration, msSinceSunset;
+                
+                if (now >= sunset) {
+                    // Evening (Sunset to Midnight) -> Use Tomorrow's Sunrise
+                    const nextSunrise = timesTom.sunrise;
+                    nightDuration = nextSunrise - sunset;
+                    msSinceSunset = now - sunset;
+                } else {
+                    // Morning (Midnight to Sunrise) -> Use Yesterday's Sunset
+                    const prevSunset = timesYest.sunset;
+                    nightDuration = sunrise - prevSunset;
+                    msSinceSunset = now - prevSunset;
+                }
+                
+                const percentNight = msSinceSunset / nightDuration;
+                halachicHourVal = 12 + (percentNight * 12); // 12 to 24
+            }
+
+            // Update DOM text
+            updateDOM(now, sunrise, sunset, halachicHourVal, isDaytime);
+
+            // Draw Clock
+            drawClock(ctx, halachicHourVal, isDaytime);
+        }
+
+        function updateDOM(now, sunrise, sunset, hVal, isDaytime) {
+            // Apply Theme
+            document.body.className = isDaytime ? 'day-mode' : 'night-mode';
+
+            // Civil Time
+            document.getElementById('civilTime').innerText = `Current Civil Time: ${now.toLocaleTimeString()}`;
+
+            // Sun Data
+            const fmt = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('sunData').innerText = `Sunrise: ${fmt(sunrise)} | Sunset: ${fmt(sunset)}`;
+
+            // Halachic Digital Time
+            // Convert decimal hour (e.g. 14.5) to HH:MM:SS
+            // Note: This is "Halachic Time", where seconds/minutes are proportional
+            const hHour = Math.floor(hVal);
+            const remainder = hVal - hHour;
+            const hMinDec = remainder * 60;
+            const hMin = Math.floor(hMinDec);
+            const hSec = Math.floor((hMinDec - hMin) * 60);
+
+            const pad = (n) => n.toString().padStart(2, '0');
+            document.getElementById('halachicDigital').innerText = 
+                `${pad(hHour)}:${pad(hMin)}:${pad(hSec)} (Zmaniyot)`;
+        }
+
+        function drawClock(ctx, hVal, isDaytime) {
+            const w = ctx.canvas.width;
+            const h = ctx.canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const r = (w / 2) - 20;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Helper to convert halachic hour (0-24) to radians
+            // 0 = Top (-PI/2)
+            // 12 = Bottom (PI/2)
+            // 24 = Top (3PI/2 or -PI/2)
+            // Formula: angle = (hour / 24) * 2PI - PI/2
+            const getAngle = (hour) => (hour / 24) * (Math.PI * 2) - (Math.PI / 2);
+
+            // 1. Draw Day/Night Arcs
+            ctx.lineWidth = 15;
+            
+            // Day Arc (0 to 12)
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, getAngle(0), getAngle(12));
+            ctx.strokeStyle = isDaytime ? '#FFD700' : '#444'; // Gold active, grey inactive
+            if(isDaytime) ctx.shadowBlur = 15; ctx.shadowColor = '#FFD700';
+            ctx.stroke();
+            ctx.shadowBlur = 0; // Reset shadow
+
+            // Night Arc (12 to 24)
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, getAngle(12), getAngle(24));
+            ctx.strokeStyle = !isDaytime ? '#7B68EE' : '#ddd'; // Purple active, light grey inactive
+            if(!isDaytime) ctx.shadowBlur = 15; ctx.shadowColor = '#7B68EE';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 2. Ticks and Numbers
+            ctx.fillStyle = document.body.classList.contains('night-mode') ? '#fff' : '#000';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let i = 0; i < 24; i++) {
+                const angle = getAngle(i);
+                const isMajor = i % 6 === 0;
+                
+                // Tick marks
+                const tickLen = isMajor ? 15 : 8;
+                const x1 = cx + Math.cos(angle) * (r - 25);
+                const y1 = cy + Math.sin(angle) * (r - 25);
+                const x2 = cx + Math.cos(angle) * (r - 25 - tickLen);
+                const y2 = cy + Math.sin(angle) * (r - 25 - tickLen);
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = document.body.classList.contains('night-mode') ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Numbers (0, 6, 12, 18)
+                if (isMajor) {
+                    const textR = r - 55;
+                    const tx = cx + Math.cos(angle) * textR;
+                    const ty = cy + Math.sin(angle) * textR;
+                    ctx.font = 'bold 20px sans-serif';
+                    ctx.fillText(i.toString(), tx, ty);
+                }
+            }
+
+            // 3. The Hand
+            const handAngle = getAngle(hVal);
+            const handLen = r - 60;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(handAngle) * handLen, cy + Math.sin(handAngle) * handLen);
+            ctx.strokeStyle = '#ef4444'; // Red hand
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Center pivot
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#ef4444';
+            ctx.fill();
+        }
+    </script>
+</body>
+</html>

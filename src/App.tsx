@@ -26,7 +26,7 @@ interface Coords {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-const TEMPLE_MOUNT: Coords = { lat: 31.7781, lng: 35.2360 };
+const TEMPLE_MOUNT: Coords = { lat: 31.776719274639515, lng: 35.234379734016926 };
 
 declare global {
   interface Window {

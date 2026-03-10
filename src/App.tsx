@@ -26,7 +26,7 @@ interface Coords {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-const NYC: Coords = { lat: 40.8448, lng: -73.9442 };
+const TEMPLE_MOUNT: Coords = { lat: 31.7781, lng: 35.2360 };
 
 declare global {
   interface Window {
@@ -425,13 +425,13 @@ function drawClock(
 /* ------------------------------------------------------------------ */
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [coords, setCoords] = useState<Coords>(NYC);
+  const [coords, setCoords] = useState<Coords>(TEMPLE_MOUNT);
   const [sunCalcLoaded, setSunCalcLoaded] = useState(false);
   const [hTime, setHTime] = useState<HalachicTime | null>(null);
   const [sunrise, setSunrise] = useState<Date | null>(null);
   const [sunset, setSunset] = useState<Date | null>(null);
   const [civilTime, setCivilTime] = useState(new Date());
-  const [locationName, setLocationName] = useState("New York City (default)");
+  const [locationName, setLocationName] = useState("Temple Mount (default)");
   const [canvasSize, setCanvasSize] = useState(340);
 
   // Responsive canvas size

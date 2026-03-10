@@ -720,7 +720,7 @@ export function App() {
           opacity: 0.55,
         }}
       >
-        <strong>Sha'ot Zmaniyot</strong> (שעות זמניות) are "proportional hours"
+        <strong>Sha'os Zmaniyot</strong> (שעות זמניות) are "proportional hours"
         — the day from sunrise to sunset is divided into 12 equal parts, as is
         the night from sunset to the next sunrise, so each halachic hour's
         real-world length changes daily with the seasons.

@@ -536,6 +536,17 @@ export function App() {
         color: isDaytime ? "#3e2c10" : "#d4cfc4",
       }}
     >
+      <a
+        className="home-link"
+        href="https://shacharkoller.com"
+        aria-label="Go home to shacharkoller.com"
+        style={{
+          color: isDaytime ? "rgba(74, 48, 16, 0.42)" : "rgba(232, 220, 200, 0.38)",
+        }}
+      >
+        <HomeIcon />
+      </a>
+
       {/* Title */}
       <h1
         style={{
@@ -732,6 +743,26 @@ export function App() {
 /* ------------------------------------------------------------------ */
 /*  Small sub-component                                                */
 /* ------------------------------------------------------------------ */
+function HomeIcon() {
+  return (
+    <svg
+      width="34"
+      height="34"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5.5 9.5V21h13V9.5" />
+      <path d="M10 21v-5.5h4V21" />
+    </svg>
+  );
+}
+
 function InfoRow({
   label,
   value,

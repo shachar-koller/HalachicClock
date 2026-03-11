@@ -450,14 +450,29 @@ export function App() {
   const [civilTime, setCivilTime] = useState(new Date());
   const [locationName, setLocationName] = useState("Temple Mount (default)");
   const [canvasSize, setCanvasSize] = useState(340);
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
 
   // Responsive canvas size
   useEffect(() => {
     function updateSize() {
       const w = window.innerWidth;
-      if (w < 400) setCanvasSize(280);
-      else if (w < 600) setCanvasSize(320);
-      else setCanvasSize(360);
+      const h = window.innerHeight;
+      let nextCanvasSize = 360;
+
+      setViewportHeight(h);
+
+      if (h < 700) {
+        if (w < 400) nextCanvasSize = 220;
+        else if (w < 600) nextCanvasSize = 240;
+        else nextCanvasSize = 280;
+      } else if (h < 820) {
+        if (w < 400) nextCanvasSize = 250;
+        else if (w < 600) nextCanvasSize = 290;
+        else nextCanvasSize = 330;
+      } else if (w < 400) nextCanvasSize = 280;
+      else if (w < 600) nextCanvasSize = 320;
+
+      setCanvasSize(nextCanvasSize);
     }
     updateSize();
     window.addEventListener("resize", updateSize);
@@ -545,6 +560,8 @@ export function App() {
     ? "linear-gradient(180deg, #f5ead0 0%, #e8d5a8 50%, #d4b976 100%)"
     : "linear-gradient(180deg, #0d1117 0%, #161b22 50%, #1a1f36 100%)";
   const appTextColor = isDaytime ? "#3e2c10" : "#d4cfc4";
+  const isCompactViewport = viewportHeight < 820;
+  const isShortViewport = viewportHeight < 700;
 
   useEffect(() => {
     document.documentElement.style.background = appBackground;
@@ -569,13 +586,17 @@ export function App() {
     <div
       className="app-shell"
       style={{
-        minHeight: "100svh",
-        height: "100%",
+        minHeight: "100dvh",
+        height: "100dvh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "24px 16px",
+        padding: isShortViewport
+          ? "16px 14px"
+          : isCompactViewport
+            ? "18px 16px"
+            : "24px 16px",
         boxSizing: "border-box",
         fontFamily: "'Georgia', 'Times New Roman', serif",
         transition: "background 0.8s ease, color 0.8s ease",
@@ -599,7 +620,7 @@ export function App() {
         style={{
           fontSize: "clamp(1.3rem, 4vw, 1.8rem)",
           fontWeight: 700,
-          marginBottom: 4,
+          marginBottom: isCompactViewport ? 2 : 4,
           letterSpacing: "0.03em",
           textAlign: "center",
           color: isDaytime ? "#4a3010" : "#e8dcc8",
@@ -610,7 +631,7 @@ export function App() {
       <p
         style={{
           fontSize: "clamp(0.85rem, 2.5vw, 1.05rem)",
-          marginBottom: 20,
+          marginBottom: isShortViewport ? 12 : isCompactViewport ? 16 : 20,
           opacity: 0.7,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
@@ -627,7 +648,7 @@ export function App() {
           boxShadow: isDaytime
             ? "0 8px 32px rgba(120,90,30,0.25), inset 0 0 20px rgba(255,255,255,0.15)"
             : "0 8px 32px rgba(0,0,0,0.5), inset 0 0 20px rgba(100,100,180,0.08)",
-          marginBottom: 24,
+          marginBottom: isShortViewport ? 14 : isCompactViewport ? 18 : 24,
           lineHeight: 0,
         }}
       >
@@ -642,7 +663,7 @@ export function App() {
             : "rgba(20,24,40,0.6)",
           backdropFilter: "blur(8px)",
           borderRadius: 16,
-          padding: "20px 28px",
+          padding: isShortViewport ? "16px 18px" : isCompactViewport ? "18px 22px" : "20px 28px",
           maxWidth: 420,
           width: "100%",
           boxShadow: isDaytime
@@ -696,7 +717,7 @@ export function App() {
             background: isDaytime
               ? "rgba(120,90,30,0.15)"
               : "rgba(150,150,220,0.12)",
-            margin: "0 0 14px",
+            margin: isCompactViewport ? "0 0 10px" : "0 0 14px",
           }}
         />
 
@@ -705,7 +726,7 @@ export function App() {
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: "10px 16px",
+            gap: isCompactViewport ? "8px 12px" : "10px 16px",
             fontSize: "clamp(0.72rem, 2vw, 0.82rem)",
           }}
         >
@@ -742,7 +763,7 @@ export function App() {
             background: isDaytime
               ? "rgba(120,90,30,0.15)"
               : "rgba(150,150,220,0.12)",
-            margin: "14px 0",
+            margin: isCompactViewport ? "10px 0" : "14px 0",
           }}
         />
 
@@ -752,6 +773,8 @@ export function App() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: "6px 12px",
             fontSize: "clamp(0.7rem, 2vw, 0.82rem)",
           }}
         >
@@ -761,7 +784,14 @@ export function App() {
               {fmtCivil(civilTime)}
             </span>
           </div>
-          <div style={{ opacity: 0.45, fontSize: "0.75em" }}>
+          <div
+            style={{
+              opacity: 0.45,
+              fontSize: "0.75em",
+              textAlign: "right",
+              minWidth: 0,
+            }}
+          >
             📍 {locationName}
           </div>
         </div>
@@ -770,11 +800,11 @@ export function App() {
       {/* Explanation */}
       <p
         style={{
-          marginTop: 20,
+          marginTop: isShortViewport ? 12 : isCompactViewport ? 16 : 20,
           maxWidth: 440,
           textAlign: "center",
           fontSize: "clamp(0.68rem, 1.8vw, 0.78rem)",
-          lineHeight: 1.6,
+          lineHeight: isCompactViewport ? 1.5 : 1.6,
           opacity: 0.55,
         }}
       >

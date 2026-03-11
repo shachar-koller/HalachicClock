@@ -1,4 +1,26 @@
-@import "tailwindcss";
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+html,
+body {
+  background: linear-gradient(180deg, #f5ead0 0%, #e8d5a8 50%, #d4b976 100%);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell {
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
 
 .home-link {
   position: fixed;

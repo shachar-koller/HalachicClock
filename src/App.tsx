@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -27,36 +27,51 @@ interface Coords {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 const TEMPLE_MOUNT: Coords = { lat: 31.776719274639515, lng: 35.234379734016926 };
+const SUN_CALC_SRC =
+  "https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js";
+const CLOCK_TICK_BUFFER_MS = 25;
+let sunCalcPromise: Promise<void> | null = null;
+
+type SunCalcApi = {
+  getTimes: (
+    date: Date,
+    lat: number,
+    lng: number
+  ) => { sunrise: Date; sunset: Date };
+};
 
 declare global {
   interface Window {
-    SunCalc: {
-      getTimes: (
-        date: Date,
-        lat: number,
-        lng: number
-      ) => { sunrise: Date; sunset: Date };
-    };
+    SunCalc?: SunCalcApi;
   }
 }
 
 function loadSunCalc(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.SunCalc) {
-      resolve();
-      return;
-    }
-    const s = document.createElement("script");
-    s.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js";
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Failed to load SunCalc"));
-    document.head.appendChild(s);
+  if (window.SunCalc) return Promise.resolve();
+  if (sunCalcPromise) return sunCalcPromise;
+
+  sunCalcPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SUN_CALC_SRC;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      sunCalcPromise = null;
+      reject(new Error("Failed to load SunCalc"));
+    };
+    document.head.appendChild(script);
   });
+
+  return sunCalcPromise;
 }
 
 function getSunTimes(date: Date, coords: Coords): SunTimes {
-  const t = window.SunCalc.getTimes(date, coords.lat, coords.lng);
+  const sunCalc = window.SunCalc;
+  if (!sunCalc) {
+    throw new Error("SunCalc is not loaded");
+  }
+
+  const t = sunCalc.getTimes(date, coords.lat, coords.lng);
   return { sunrise: t.sunrise, sunset: t.sunset };
 }
 
@@ -73,16 +88,18 @@ function fmtCivil(d: Date): string {
   });
 }
 
-function computeHalachicTime(now: Date, coords: Coords): HalachicTime | null {
+function computeHalachicTime(
+  now: Date,
+  coords: Coords,
+  todaySun = getSunTimes(now, coords)
+): HalachicTime | null {
   if (!window.SunCalc) return null;
 
-  const today = new Date(now);
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const todaySun = getSunTimes(today, coords);
   const yesterdaySun = getSunTimes(yesterday, coords);
   const tomorrowSun = getSunTimes(tomorrow, coords);
 
@@ -426,7 +443,7 @@ function drawClock(
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [coords, setCoords] = useState<Coords>(TEMPLE_MOUNT);
-  const [sunCalcLoaded, setSunCalcLoaded] = useState(false);
+  const [sunCalcReady, setSunCalcReady] = useState(false);
   const [hTime, setHTime] = useState<HalachicTime | null>(null);
   const [sunrise, setSunrise] = useState<Date | null>(null);
   const [sunset, setSunset] = useState<Date | null>(null);
@@ -450,7 +467,7 @@ export function App() {
   // Load SunCalc
   useEffect(() => {
     loadSunCalc()
-      .then(() => setSunCalcLoaded(true))
+      .then(() => setSunCalcReady(true))
       .catch(() => console.error("Could not load SunCalc"));
   }, []);
 
@@ -465,30 +482,49 @@ export function App() {
         );
       },
       () => {
-        // denied – keep NYC
+        // Denied or unavailable: keep the Temple Mount default.
       }
     );
   }, []);
 
-  // Compute halachic time every 200ms
-  const tick = useCallback(() => {
-    if (!sunCalcLoaded) return;
-    const now = new Date();
-    setCivilTime(now);
-
-    const todaySun = getSunTimes(now, coords);
-    setSunrise(todaySun.sunrise);
-    setSunset(todaySun.sunset);
-
-    const ht = computeHalachicTime(now, coords);
-    setHTime(ht);
-  }, [sunCalcLoaded, coords]);
-
+  // Keep the digital readout aligned to real-world second boundaries.
   useEffect(() => {
+    let timeoutId: number | undefined;
+
+    function tick() {
+      const now = new Date();
+      setCivilTime(now);
+
+      if (!sunCalcReady || !window.SunCalc) {
+        setSunrise(null);
+        setSunset(null);
+        setHTime(null);
+        return;
+      }
+
+      const todaySun = getSunTimes(now, coords);
+      setSunrise(todaySun.sunrise);
+      setSunset(todaySun.sunset);
+      setHTime(computeHalachicTime(now, coords, todaySun));
+    }
+
+    function scheduleNextTick() {
+      const delay = 1000 - (Date.now() % 1000) + CLOCK_TICK_BUFFER_MS;
+      timeoutId = window.setTimeout(() => {
+        tick();
+        scheduleNextTick();
+      }, delay);
+    }
+
     tick();
-    const id = setInterval(tick, 200);
-    return () => clearInterval(id);
-  }, [tick]);
+    scheduleNextTick();
+
+    return () => {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [coords, sunCalcReady]);
 
   // Draw canvas
   useEffect(() => {
@@ -505,6 +541,16 @@ export function App() {
   }, [hTime, canvasSize]);
 
   const isDaytime = hTime?.isDaytime ?? true;
+  const appBackground = isDaytime
+    ? "linear-gradient(180deg, #f5ead0 0%, #e8d5a8 50%, #d4b976 100%)"
+    : "linear-gradient(180deg, #0d1117 0%, #161b22 50%, #1a1f36 100%)";
+  const appTextColor = isDaytime ? "#3e2c10" : "#d4cfc4";
+
+  useEffect(() => {
+    document.documentElement.style.background = appBackground;
+    document.body.style.background = appBackground;
+    document.body.style.color = appTextColor;
+  }, [appBackground, appTextColor]);
 
   // Format halachic digital time
   const halachicDigital = hTime
@@ -521,19 +567,20 @@ export function App() {
 
   return (
     <div
+      className="app-shell"
       style={{
-        minHeight: "100vh",
+        minHeight: "100svh",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         padding: "24px 16px",
+        boxSizing: "border-box",
         fontFamily: "'Georgia', 'Times New Roman', serif",
         transition: "background 0.8s ease, color 0.8s ease",
-        background: isDaytime
-          ? "linear-gradient(180deg, #f5ead0 0%, #e8d5a8 50%, #d4b976 100%)"
-          : "linear-gradient(180deg, #0d1117 0%, #161b22 50%, #1a1f36 100%)",
-        color: isDaytime ? "#3e2c10" : "#d4cfc4",
+        background: appBackground,
+        color: appTextColor,
       }}
     >
       <a

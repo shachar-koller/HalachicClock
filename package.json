@@ -12,8 +12,11 @@
     "deploy": "bun run build && bunx --bun wrangler deploy"
   },
   "dependencies": {
+    "@hebcal/core": "^6.0.8",
+    "kosher-zmanim": "^0.9.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "tz-lookup": "^6.1.25"
   },
   "devDependencies": {
     "@types/react": "19.2.7",
